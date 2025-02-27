@@ -10,8 +10,8 @@ from models.nets import Expert
 from models.gail import GAIL
 
 
-def main(env_name):
-    ckpt_path = "ckpts"
+def main(env_name, ckpt_path):
+    # ckpt_path = "ckpts"
     if not os.path.isdir(ckpt_path):
         os.mkdir(ckpt_path)
 
@@ -93,6 +93,14 @@ if __name__ == "__main__":
             The possible environments are \
                 [CartPole-v1, Pendulum-v0, BipedalWalker-v3]"
     )
+    
+    parser.add_argument(
+        "--ckpt_path",
+        type=str,
+        default="ckpts",
+        help="Path to save checkpoints"
+    )
+    
     args = parser.parse_args()
 
     main(**vars(args))

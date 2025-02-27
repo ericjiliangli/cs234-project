@@ -49,7 +49,12 @@ class GAIL(Module):
 
     def train(self, env, expert, render=False):
         num_iters = self.train_config["num_iters"]
+        
+        
         num_steps_per_iter = self.train_config["num_steps_per_iter"]
+        num_steps_per_iter_expert = self.train_config["num_steps_per_iter_expert"]
+
+        
         horizon = self.train_config["horizon"]
         lambda_ = self.train_config["lambda"]
         gae_gamma = self.train_config["gae_gamma"]
@@ -66,8 +71,11 @@ class GAIL(Module):
         exp_obs = []
         exp_acts = []
 
-        steps = 0
-        while steps < num_steps_per_iter:
+        # ----------------------
+        # Collect Expert Data
+        # ----------------------
+        expert_steps = 0
+        while expert_steps < num_steps_per_iter_expert:
             ep_obs = []
             ep_rwds = []
 
@@ -76,7 +84,7 @@ class GAIL(Module):
 
             ob = env.reset()
 
-            while not done and steps < num_steps_per_iter:
+            while not done and expert_steps < num_steps_per_iter_expert:
                 act = expert.act(ob)
 
                 ep_obs.append(ob)
@@ -90,23 +98,17 @@ class GAIL(Module):
                 ep_rwds.append(rwd)
 
                 t += 1
-                steps += 1
+                expert_steps += 1
 
-                if horizon is not None:
-                    if t >= horizon:
-                        done = True
-                        break
+                if horizon is not None and t >= horizon:
+                    done = True
+                    break
 
             if done:
                 exp_rwd_iter.append(np.sum(ep_rwds))
 
-            ep_obs = FloatTensor(np.array(ep_obs))
-            ep_rwds = FloatTensor(ep_rwds)
-
         exp_rwd_mean = np.mean(exp_rwd_iter)
-        print(
-            "Expert Reward Mean: {}".format(exp_rwd_mean)
-        )
+        print("Expert Reward Mean: {}".format(exp_rwd_mean))
 
         exp_obs = FloatTensor(np.array(exp_obs))
         exp_acts = FloatTensor(np.array(exp_acts))
@@ -214,21 +216,35 @@ class GAIL(Module):
 
             if normalize_advantage:
                 advs = (advs - advs.mean()) / advs.std()
-
+            
+            # -------------------------------
+            # Train the Discriminator
+            # -------------------------------
             self.d.train()
+            
+            # To counter the imbalance, downsample agent data to match expert samples.
+            num_expert_samples = exp_obs.shape[0]
+            num_agent_samples = obs.shape[0]
+            if num_agent_samples > num_expert_samples:
+                indices = torch.randperm(num_agent_samples)[:num_expert_samples]
+                obs_balanced = obs[indices]
+                acts_balanced = acts[indices]
+            else:
+                obs_balanced = obs
+                acts_balanced = acts
+
             exp_scores = self.d.get_logits(exp_obs, exp_acts)
-            nov_scores = self.d.get_logits(obs, acts)
+            nov_scores = self.d.get_logits(obs_balanced, acts_balanced)
 
             opt_d.zero_grad()
-            loss = torch.nn.functional.binary_cross_entropy_with_logits(
-                exp_scores, torch.zeros_like(exp_scores)
-            ) \
-                + torch.nn.functional.binary_cross_entropy_with_logits(
-                    nov_scores, torch.ones_like(nov_scores)
-                )
+            loss = (torch.nn.functional.binary_cross_entropy_with_logits(exp_scores, torch.zeros_like(exp_scores)) +
+                    torch.nn.functional.binary_cross_entropy_with_logits(nov_scores, torch.ones_like(nov_scores)))
             loss.backward()
             opt_d.step()
-
+            
+            # -------------------------------
+            # Train the Value Network
+            # -------------------------------
             self.v.train()
             old_params = get_flat_params(self.v).detach()
             old_v = self.v(obs).detach()
@@ -255,7 +271,10 @@ class GAIL(Module):
             new_params = old_params + alpha * s
 
             set_params(self.v, new_params)
-
+            
+            # -------------------------------
+            # Train the Policy Network
+            # -------------------------------
             self.pi.train()
             old_params = get_flat_params(self.pi).detach()
             old_distb = self.pi(obs)
