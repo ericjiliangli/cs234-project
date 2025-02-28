@@ -7,9 +7,9 @@ df = pd.read_csv(log_file)
 
 # Plot avg reward vs. iteration
 plt.figure(figsize=(10, 5))
-plt.plot(df["iteration"], df["avg_reward"], label="Avg Reward", linewidth=2)
+plt.plot(df["iteration"], df["total_reward"], label="Reward", linewidth=2)
 plt.xlabel("Iteration")
-plt.ylabel("Average Reward (Last 10 Episodes)")
+plt.ylabel("Total Reward")
 plt.title("PPO Training Progress")
 plt.legend()
 plt.grid()
