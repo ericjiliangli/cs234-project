@@ -11,21 +11,25 @@ from stable_baselines3.common.callbacks import EvalCallback
 from utils import PartialObsWrapper
 import matplotlib.pyplot as plt
 
+DEVICE = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+DEVICE = torch.device("cpu")
+print(f"Using device: {DEVICE}")
+
 def evaluate(env, policy_net, num_episodes=5):
     """Runs the agent for num_episodes and returns the mean reward."""
     total_rewards = []
     
     for _ in range(num_episodes):
-        state = env.reset()
+        state = env.reset()[0]
         done = False
         episode_reward = 0
 
         while not done:
             with torch.no_grad():
-                state_tensor = torch.tensor(np.expand_dims(state, axis=0), dtype=torch.float32, device="cpu")
+                state_tensor = torch.tensor(np.expand_dims(state, axis=0), dtype=torch.float32, device=DEVICE)
                 action, _ = policy_net(state_tensor)  # Assuming policy_net.forward() returns (action, log_prob)
             action = action.cpu().numpy().flatten()
-            state, reward, done, info = env.step(action.tolist())
+            state, reward, done, _, info = env.step(action.tolist())
             episode_reward += reward
 
         total_rewards.append(episode_reward)
@@ -41,9 +45,31 @@ def main(args):
     eval_env = gym.make(env_name)
     state_dim = train_env.observation_space.shape[0]
     mask = np.ones(state_dim)
-    if args.mask == "true":
+    if args.mask != "false":
         print("""Apply feature masking: 'true' (removes LIDAR features) or 'false' (full observation).""")
-        mask[19:] = 0
+        # 19
+        if args.mask == "19":
+            print("Masking 20-24")
+            mask[19:] = 0
+        elif args.mask == "3":
+            print("Masking 3")
+            mask_indices = [3,12,13]
+            mask[mask_indices] = 0
+        elif args.mask == "14":
+            print("Masking 14")
+            mask[14:] = 0
+        elif args.mask == "12":
+            print("Masking 12,13,19-23")
+            mask_indices = [12,13,19,20,21,22,23]
+            mask[mask_indices] = 0 
+        elif args.mask == "21":
+            print("Masking 21")
+            mask_indices = [12,13,21,22,23]
+            mask[mask_indices] = 0  
+        elif args.mask == "12-24":
+            print("Masking 12,24")
+            mask[12:] = 0
+        
         train_env = PartialObsWrapper(train_env, mask)
         eval_env = PartialObsWrapper(eval_env, mask)
     if env_name in ["CartPole-v1"]:
@@ -69,10 +95,14 @@ def main(args):
     
     print(f"Policy Net: {policy_net} \nValue Net: {value_net}")
     
+    # detect whether I can use apple GPU mps to speed up the training
+    # policy_net.to(DEVICE)
+    value_net.to(DEVICE)
+    print(f"Move value_net and policy_net to device: {DEVICE}")
     
-   
-    env_setter = EnvSetter(state_dim, action_dim)
-    ppo_agent = PPO(policy_net, value_net)
+    
+    env_setter = EnvSetter(state_dim, action_dim, device=DEVICE)
+    ppo_agent = PPO(policy_net, value_net, device=DEVICE)
     train(train_env, env_setter, policy_net, value_net, ppo_agent,max_episode, eval_env)
     train_env.close()
     
@@ -82,6 +112,22 @@ def train(env, env_setter, policy_net, value_net, agent, max_episode, eval_env, 
     
     
     save_dir = "-".join(args.ckpt.split("/")[-3:]) if args.ckpt != "none" else "PPO-result"
+    if args.mask == "false":
+        print("No mask applied")
+        save_dir = f"{save_dir}/non-mask"
+    if args.mask == "19":
+        save_dir = f"{save_dir}/mask19-24"
+    if args.mask == "3":
+        save_dir = f"{save_dir}/mask3"
+    if args.mask == "14":
+        save_dir = f"{save_dir}/mask14-24"
+    if args.mask == "12":
+        save_dir = f"{save_dir}/mask12-13-19-23"
+    if args.mask == "21":
+        save_dir = f"{save_dir}/mask12-13-21-23"
+    if args.mask == "12-24":
+        save_dir = f"{save_dir}/mask12-24"
+        
 
     if not os.path.exists(save_dir):
         os.mkdir(save_dir)
@@ -91,7 +137,8 @@ def train(env, env_setter, policy_net, value_net, agent, max_episode, eval_env, 
     eval_rewards = []
     timesteps = []
     
-    for i in range(max_episode):
+    from tqdm import trange
+    for i in trange(max_episode):
         with torch.no_grad():
             mb_states, mb_actions, mb_old_a_logps, mb_values, mb_returns, mb_rewards = env_setter.run(env, policy_net, value_net)
             mb_advs = mb_returns - mb_values
@@ -144,6 +191,9 @@ def train(env, env_setter, policy_net, value_net, agent, max_episode, eval_env, 
     train_reward_path_np = os.path.join(save_dir, "train_reward.np") if args.mask == "false" else os.path.join(save_dir, "train_reward_masked.np")
     np.savez(train_reward_path_np, timestamps=np.array(steps), rewards=np.array(rewards))
     
+    eval_reward_path_np = os.path.join(save_dir, "eval_reward.np") if args.mask == "false" else os.path.join(save_dir, "eval_reward_masked.np")
+    np.savez(eval_reward_path_np, timestamps=np.array(steps), rewards=np.array(eval_rewards))
+    
     plt.figure(figsize=(10, 5))
     plt.plot(timesteps, eval_rewards, label="Eval Reward")
     plt.xlabel("Episodes")
@@ -161,7 +211,7 @@ def train(env, env_setter, policy_net, value_net, agent, max_episode, eval_env, 
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train PPO on BipedalWalker-v3")
-    parser.add_argument("--mask", type=str, choices=["true", "false"], default="false",
+    parser.add_argument("--mask", type=str, choices=["false","19","3","12","14","21","12-24"], default="false",
                         help="Apply feature masking: 'true' (removes LIDAR features) or 'false' (full observation).")
     parser.add_argument("--env", type=str, default="BipedalWalker-v3",help="PipedalWalker-v3")
     parser.add_argument("--ckpt", type=str, default="../gail/5000_expert/BipedalWalker-v3",help="checkpoint file name")
