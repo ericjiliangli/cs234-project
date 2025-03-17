@@ -20,16 +20,19 @@ def evaluate(env, policy_net, num_episodes=5):
     total_rewards = []
     
     for _ in range(num_episodes):
-        state = env.reset()[0]
+        state = env.reset()[0][0]
         done = False
         episode_reward = 0
+        
+        truncated = False
 
+        # while not done and not truncated:
         while not done:
             with torch.no_grad():
                 state_tensor = torch.tensor(np.expand_dims(state, axis=0), dtype=torch.float32, device=DEVICE)
                 action, _ = policy_net(state_tensor)  # Assuming policy_net.forward() returns (action, log_prob)
             action = action.cpu().numpy().flatten()
-            state, reward, done, _, info = env.step(action.tolist())
+            state, reward, done, truncated, info = env.step(action.tolist())
             episode_reward += reward
 
         total_rewards.append(episode_reward)
@@ -162,11 +165,11 @@ def train(env, env_setter, policy_net, value_net, agent, max_episode, eval_env, 
             print("mean length = {:.2f}".format(mean_length / eval_freq))
 
             print("\nSaving the model ... ", end="")
-            torch.save({
-                "it": i,
-                "PolicyNet": policy_net.state_dict(),
-                "ValueNet": value_net.state_dict()
-            }, os.path.join(save_dir, "model.pt"))
+            # torch.save({
+            #     "it": i,
+            #     "PolicyNet": policy_net.state_dict(),
+            #     "ValueNet": value_net.state_dict()
+            # }, os.path.join(save_dir, "model.pt"))
             print("Done.\n")
 
             mean_total_reward = 0
@@ -192,7 +195,7 @@ def train(env, env_setter, policy_net, value_net, agent, max_episode, eval_env, 
     np.savez(train_reward_path_np, timestamps=np.array(steps), rewards=np.array(rewards))
     
     eval_reward_path_np = os.path.join(save_dir, "eval_reward.np") if args.mask == "false" else os.path.join(save_dir, "eval_reward_masked.np")
-    np.savez(eval_reward_path_np, timestamps=np.array(steps), rewards=np.array(eval_rewards))
+    np.savez(eval_reward_path_np, timestamps=np.array(timesteps), rewards=np.array(eval_rewards))
     
     plt.figure(figsize=(10, 5))
     plt.plot(timesteps, eval_rewards, label="Eval Reward")

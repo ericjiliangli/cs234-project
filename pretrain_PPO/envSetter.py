@@ -51,7 +51,7 @@ class EnvSetter:
     #Run an episode using the policy net & value net
     def run(self, env, policy_net, value_net):
         #Run an episode
-        state = env.reset()  #Initial state
+        state = env.reset()[0]  #Initial state
         
         # print(state)
         
@@ -76,8 +76,10 @@ class EnvSetter:
             self.mb_a_logps[step] = a_logp
             self.mb_values[step] = value
 
-            state, reward, done, info = env.step(action.tolist())  # Convert NumPy array to list
-            done = done  # Ensure termination includes truncation
+            state, reward, done, truncated, info = env.step(action.tolist())  # Convert NumPy array to list
+            # done = done or truncated # Ensure termination includes truncation
+            done = done # Ensure termination includes truncation
+
 
             self.mb_rewards[step] = reward
 
@@ -90,13 +92,13 @@ class EnvSetter:
             torch.tensor(np.expand_dims(state, axis=0), dtype=torch.float32, device=self.device)
         ).cpu().numpy()
 
-        # mb_returns = self.compute_discounted_return(self.mb_rewards[:episode_len], last_value)
+        mb_returns = self.compute_discounted_return(self.mb_rewards[:episode_len], last_value)
         
-        mb_returns = self.compute_gae(
-            self.mb_rewards[:episode_len], 
-            self.mb_values[:episode_len],
-            last_value
-        )
+        # mb_returns = self.compute_gae(
+        #     self.mb_rewards[:episode_len], 
+        #     self.mb_values[:episode_len],
+        #     last_value
+        # )
         
         return self.mb_states[:episode_len], \
                 self.mb_actions[:episode_len], \

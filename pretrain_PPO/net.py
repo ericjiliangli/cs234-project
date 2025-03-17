@@ -87,4 +87,4 @@ class ValueNet(nn.Module):
     
     #Forward pass
     def forward(self, state):
-        return self.net(state)
+        return self.net(state)[:, 0]
