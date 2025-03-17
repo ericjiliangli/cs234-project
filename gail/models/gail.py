@@ -104,11 +104,18 @@ class GAIL(Module):
                     done = True
                     break
 
-            if done:
-                exp_rwd_iter.append(np.sum(ep_rwds))
+            # if done:
+            exp_rwd_iter.append(np.sum(ep_rwds))
 
         exp_rwd_mean = np.mean(exp_rwd_iter)
+        print("Expert Reward Length: {}".format(len(ep_rwds)))
         print("Expert Reward Mean: {}".format(exp_rwd_mean))
+        
+        # Convert your lists to numpy arrays
+        # obs_array_np = np.array(exp_obs)
+        # acts_array_np = np.array(exp_acts)
+        
+        # np.savez('expert_data.npz', obs=obs_array_np, acts=acts_array_np)
 
         exp_obs = FloatTensor(np.array(exp_obs))
         exp_acts = FloatTensor(np.array(exp_acts))

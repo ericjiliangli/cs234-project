@@ -15,7 +15,7 @@ def main(env_name, ckpt_path):
     if not os.path.isdir(ckpt_path):
         os.mkdir(ckpt_path)
 
-    if env_name not in ["CartPole-v1", "Pendulum-v0", "BipedalWalker-v3"]:
+    if env_name not in ["Pendulum-v1", "BipedalWalker-v3"]:
         print("The environment name is wrong!")
         return
 
@@ -39,12 +39,9 @@ def main(env_name, ckpt_path):
     env.reset()
 
     state_dim = len(env.observation_space.high)
-    if env_name in ["CartPole-v1"]:
-        discrete = True
-        action_dim = env.action_space.n
-    else:
-        discrete = False
-        action_dim = env.action_space.shape[0]
+
+    discrete = False
+    action_dim = env.action_space.shape[0]
 
     if torch.cuda.is_available():
         device = "cuda"
@@ -88,10 +85,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--env_name",
         type=str,
-        default="CartPole-v1",
+        default="Pendulum-v1",
         help="Type the environment name to run. \
             The possible environments are \
-                [CartPole-v1, Pendulum-v0, BipedalWalker-v3]"
+                [Pendulum-v1, BipedalWalker-v3]"
     )
     
     parser.add_argument(

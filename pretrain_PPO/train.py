@@ -217,7 +217,7 @@ if __name__ == "__main__":
     parser.add_argument("--mask", type=str, choices=["false","19","3","12","14","21","12-24"], default="false",
                         help="Apply feature masking: 'true' (removes LIDAR features) or 'false' (full observation).")
     parser.add_argument("--env", type=str, default="BipedalWalker-v3",help="PipedalWalker-v3")
-    parser.add_argument("--ckpt", type=str, default="../gail/5000_expert/BipedalWalker-v3",help="checkpoint file name")
+    parser.add_argument("--ckpt", type=str, default="../pretrained_ckpt/gail/5000_expert/BipedalWalker-v3",help="checkpoint file name")
     parser.add_argument("--max_episode", type=int, default=5000,help="episode count")
     args = parser.parse_args()
     main(args)
